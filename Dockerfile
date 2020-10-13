@@ -71,7 +71,7 @@ RUN           git clone git://$GIT_REPO .
 RUN           git checkout $GIT_VERSION
 RUN           npm install --production
 RUN           mkdir -p /dist/boot/bin
-RUN           mv $GOPATH/src/$GIT_REPO /dist/boot/bin/
+RUN           mv "$GOPATH/src/$GIT_REPO" /dist/boot/bin/
 
 #######################
 # Builder assemble
