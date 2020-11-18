@@ -4,7 +4,7 @@ ARG           RUNTIME_BASE=dubodubonduponey/base:runtime
 #######################
 # Extra builder for healthchecker
 #######################
-# hadolint ignore=DL3006
+# hadolint ignore=DL3006,DL3029
 FROM          --platform=$BUILDPLATFORM $BUILDER_BASE                                                                   AS builder-healthcheck
 
 ARG           GIT_REPO=github.com/dubo-dubon-duponey/healthcheckers
@@ -20,7 +20,7 @@ RUN           env GOOS=linux GOARCH="$(printf "%s" "$TARGETPLATFORM" | sed -E 's
 #######################
 # Goello
 #######################
-# hadolint ignore=DL3006
+# hadolint ignore=DL3006,DL3029
 FROM          --platform=$BUILDPLATFORM $BUILDER_BASE                                                                   AS builder-goello
 
 ARG           GIT_REPO=github.com/dubo-dubon-duponey/goello
@@ -36,12 +36,12 @@ RUN           env GOOS=linux GOARCH="$(printf "%s" "$TARGETPLATFORM" | sed -E 's
 #######################
 # Caddy
 #######################
-# hadolint ignore=DL3006
+# hadolint ignore=DL3006,DL3029
 FROM          --platform=$BUILDPLATFORM $BUILDER_BASE                                                                   AS builder-caddy
 
-# This is 2.1.1+ with golang 1.15 support (08/21/2020)
+# This is 2.2.1 (11/16/2020)
 ARG           GIT_REPO=github.com/caddyserver/caddy
-ARG           GIT_VERSION=0279a57ac465b2920abf71d86203d9feac2015b5
+ARG           GIT_VERSION=385adf5d878939c381c7f73c771771d34523a1a7
 
 WORKDIR       $GOPATH/src/$GIT_REPO
 RUN           git clone https://$GIT_REPO .
@@ -54,7 +54,7 @@ RUN           env GOOS=linux GOARCH="$(printf "%s" "$TARGETPLATFORM" | sed -E 's
 #######################
 # Rudder transformer
 #######################
-# hadolint ignore=DL3006
+# hadolint ignore=DL3006,DL3029
 FROM          --platform=$BUILDPLATFORM $BUILDER_BASE                                                                   AS builder-main-transformer
 
 # XXX node-gyp is bollocks
@@ -64,7 +64,10 @@ ENV           PATH=/tmp/.npm-global/bin:$PATH
 ENV           NPM_CONFIG_PREFIX=/tmp/.npm-global
 
 ARG           GIT_REPO=github.com/rudderlabs/rudder-transformer
-ARG           GIT_VERSION=e9578cbb0b5f9dd85e8c63fb53539e1c27997e80
+# XXX first working set
+#ARG           GIT_VERSION=e9578cbb0b5f9dd85e8c63fb53539e1c27997e80
+# Nov, 16, 2020
+ARG           GIT_VERSION=cfef63a21fb0dbc3355bb3843fd24940e3296d8e
 
 WORKDIR       $GOPATH/src/$GIT_REPO
 RUN           git clone git://$GIT_REPO .
