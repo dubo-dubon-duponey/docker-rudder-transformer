@@ -1,61 +1,15 @@
-ARG           BUILDER_BASE=dubodubonduponey/base:builder
-ARG           RUNTIME_BASE=dubodubonduponey/base:runtime
+ARG           FROM_REGISTRY=ghcr.io/dubo-dubon-duponey
 
-#######################
-# Extra builder for healthchecker
-#######################
-# hadolint ignore=DL3006,DL3029
-FROM          --platform=$BUILDPLATFORM $BUILDER_BASE                                                                   AS builder-healthcheck
+ARG           FROM_IMAGE_BUILDER=base:builder-bullseye-2021-07-01@sha256:f1c46316c38cc1ca54fd53b54b73797b35ba65ee727beea1a5ed08d0ad7e8ccf
+ARG           FROM_IMAGE_RUNTIME=base:runtime-bullseye-2021-07-01@sha256:9f5b20d392e1a1082799b3befddca68cee2636c72c502aa7652d160896f85b36
+ARG           FROM_IMAGE_TOOLS=tools:linux-bullseye-2021-07-01@sha256:f1e25694fe933c7970773cb323975bb5c995fa91d0c1a148f4f1c131cbc5872c
 
-ARG           GIT_REPO=github.com/dubo-dubon-duponey/healthcheckers
-ARG           GIT_VERSION=51ebf8ca3d255e0c846307bf72740f731e6210c3
-
-WORKDIR       $GOPATH/src/$GIT_REPO
-RUN           git clone git://$GIT_REPO .
-RUN           git checkout $GIT_VERSION
-# hadolint ignore=DL4006
-RUN           env GOOS=linux GOARCH="$(printf "%s" "$TARGETPLATFORM" | sed -E 's/^[^/]+\/([^/]+).*/\1/')" go build -v -ldflags "-s -w" \
-                -o /dist/boot/bin/http-health ./cmd/http
-
-#######################
-# Goello
-#######################
-# hadolint ignore=DL3006,DL3029
-FROM          --platform=$BUILDPLATFORM $BUILDER_BASE                                                                   AS builder-goello
-
-ARG           GIT_REPO=github.com/dubo-dubon-duponey/goello
-ARG           GIT_VERSION=6f6c96ef8161467ab25be45fe3633a093411fcf2
-
-WORKDIR       $GOPATH/src/$GIT_REPO
-RUN           git clone git://$GIT_REPO .
-RUN           git checkout $GIT_VERSION
-# hadolint ignore=DL4006
-RUN           env GOOS=linux GOARCH="$(printf "%s" "$TARGETPLATFORM" | sed -E 's/^[^/]+\/([^/]+).*/\1/')" go build -v -ldflags "-s -w" \
-                -o /dist/boot/bin/goello-server ./cmd/server/main.go
-
-#######################
-# Caddy
-#######################
-# hadolint ignore=DL3006,DL3029
-FROM          --platform=$BUILDPLATFORM $BUILDER_BASE                                                                   AS builder-caddy
-
-# This is 2.2.1 (11/16/2020)
-ARG           GIT_REPO=github.com/caddyserver/caddy
-ARG           GIT_VERSION=385adf5d878939c381c7f73c771771d34523a1a7
-
-WORKDIR       $GOPATH/src/$GIT_REPO
-RUN           git clone https://$GIT_REPO .
-RUN           git checkout $GIT_VERSION
-
-# hadolint ignore=DL4006
-RUN           env GOOS=linux GOARCH="$(printf "%s" "$TARGETPLATFORM" | sed -E 's/^[^/]+\/([^/]+).*/\1/')" go build -v -ldflags "-s -w" \
-                -o /dist/boot/bin/caddy ./cmd/caddy
+FROM          $FROM_REGISTRY/$FROM_IMAGE_TOOLS                                                                          AS builder-tools
 
 #######################
 # Rudder transformer
 #######################
-# hadolint ignore=DL3006,DL3029
-FROM          --platform=$BUILDPLATFORM $BUILDER_BASE                                                                   AS builder-main-transformer
+FROM          --platform=$BUILDPLATFORM $FROM_REGISTRY/$FROM_IMAGE_BUILDER                                              AS builder-main-transformer
 
 # XXX node-gyp is bollocks
 ENV           USER=root
@@ -63,15 +17,13 @@ RUN           mkdir -p /tmp/.npm-global
 ENV           PATH=/tmp/.npm-global/bin:$PATH
 ENV           NPM_CONFIG_PREFIX=/tmp/.npm-global
 
-ARG           GIT_REPO=github.com/rudderlabs/rudder-transformer
-# XXX first working set
-#ARG           GIT_VERSION=e9578cbb0b5f9dd85e8c63fb53539e1c27997e80
 # Nov, 16, 2020
-ARG           GIT_VERSION=cfef63a21fb0dbc3355bb3843fd24940e3296d8e
+ENV           GIT_REPO=github.com/rudderlabs/rudder-transformer
+ENV           GIT_VERSION=2203066
+ENV           GIT_COMMIT=220306626877ce3c69bab7d10ae32ce76fd90ff4
 
 WORKDIR       $GOPATH/src/$GIT_REPO
-RUN           git clone git://$GIT_REPO .
-RUN           git checkout $GIT_VERSION
+RUN           git clone --recurse-submodules git://"$GIT_REPO" . && git checkout "$GIT_COMMIT"
 RUN           npm install --production
 RUN           mkdir -p /dist/boot/bin
 RUN           mv "$GOPATH/src/$GIT_REPO" /dist/boot/bin/
@@ -79,27 +31,32 @@ RUN           mv "$GOPATH/src/$GIT_REPO" /dist/boot/bin/
 #######################
 # Builder assemble
 #######################
-# hadolint ignore=DL3006
-FROM          $BUILDER_BASE                                                                                             AS builder-assembly-transformer
-
-COPY          --from=builder-healthcheck  /dist/boot/bin /dist/boot/bin
-COPY          --from=builder-caddy        /dist/boot/bin /dist/boot/bin
-COPY          --from=builder-goello       /dist/boot/bin /dist/boot/bin
+FROM          --platform=$BUILDPLATFORM $FROM_REGISTRY/$FROM_IMAGE_BUILDER                                              AS builder-assembly-transformer
 
 COPY          --from=builder-main-transformer /dist/boot/bin /dist/boot/bin
 
+COPY          --from=builder-tools  /boot/bin/goello-server  /dist/boot/bin
+COPY          --from=builder-tools  /boot/bin/caddy          /dist/boot/bin
+COPY          --from=builder-tools  /boot/bin/http-health    /dist/boot/bin
+
 RUN           chmod 555 /dist/boot/bin/*; \
               epoch="$(date --date "$BUILD_CREATED" +%s)"; \
-              find /dist/boot/bin -newermt "@$epoch" -exec touch --no-dereference --date="@$epoch" '{}' +;
+              find /dist/boot -newermt "@$epoch" -exec touch --no-dereference --date="@$epoch" '{}' +;
 
-# hadolint ignore=DL3006
-FROM          $RUNTIME_BASE                                                                                             AS transformer
+FROM          $FROM_REGISTRY/$FROM_IMAGE_RUNTIME                                                                        AS transformer
 
 USER          root
 
-RUN           apt-get update -qq          && \
+RUN           --mount=type=secret,uid=100,id=CA \
+              --mount=type=secret,uid=100,id=CERTIFICATE \
+              --mount=type=secret,uid=100,id=KEY \
+              --mount=type=secret,uid=100,id=GPG.gpg \
+              --mount=type=secret,id=NETRC \
+              --mount=type=secret,id=APT_SOURCES \
+              --mount=type=secret,id=APT_CONFIG \
+              apt-get update -qq          && \
               apt-get install -qq --no-install-recommends \
-                nodejs=10.21.0~dfsg-1~deb10u1 && \
+                nodejs=12.21.0~dfsg-4 && \
               apt-get -qq autoremove      && \
               apt-get -qq clean           && \
               rm -rf /var/lib/apt/lists/* && \
@@ -108,29 +65,35 @@ RUN           apt-get update -qq          && \
 
 USER          dubo-dubon-duponey
 
-COPY          --from=builder-assembly-transformer --chown=$BUILD_UID:root /dist .
+COPY          --from=builder-assembly-transformer --chown=$BUILD_UID:root /dist /
 
 EXPOSE        4000
 
 VOLUME        /data
 
 # mDNS
-ENV           MDNS_NAME="Fancy Rudder Transformer Service Name"
+ENV           MDNS_NAME="Rudder Transformer mDNS display name"
 ENV           MDNS_HOST="rudder-transformer"
 ENV           MDNS_TYPE=_http._tcp
 
-# Authentication
-ENV           USERNAME="dubo-dubon-duponey"
-ENV           PASSWORD="base64_bcrypt_encoded_use_caddy_hash_password_to_generate"
-ENV           REALM="My precious rudder transformer"
+# XXX incomplete - miss domain et al
+# Control wether tls is going to be "internal" (eg: self-signed), or alternatively an email address to enable letsencrypt
+ENV           TLS="internal"
+# Either require_and_verify or verify_if_given
+ENV           MTLS_MODE="verify_if_given"
+
+# Realm in case access is authenticated
+ENV           REALM="My Precious Realm"
+# Provide username and password here (call the container with the "hash" command to generate a properly encrypted password, otherwise, a random one will be generated)
+ENV           USERNAME=""
+ENV           PASSWORD=""
 
 # Log level and port
-ENV           LOG_LEVEL=info
-ENV           PORT=4000
-ENV           INTERNAL_PORT=9090
+ENV           LOG_LEVEL=warn
+ENV           PORT=4443
 
-ENV           HEALTHCHECK_URL=http://127.0.0.1:4000/
+ENV           HEALTHCHECK_URL=http://127.0.0.1:10000/
 
-HEALTHCHECK   --interval=30s --timeout=30s --start-period=10s --retries=1 CMD http-health || exit 1
+HEALTHCHECK   --interval=120s --timeout=30s --start-period=10s --retries=1 CMD http-health || exit 1
 
 # ENTRYPOINT    ["node", "./rudder-transformer/index.js"]
