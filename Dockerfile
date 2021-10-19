@@ -84,11 +84,11 @@ EXPOSE        80
 # Log verbosity for
 ENV           LOG_LEVEL="warn"
 # Domain name to serve
-ENV           DOMAIN="$NICK.local"
+ENV           DOMAIN="$_SERVICE_NICK.local"
 ENV           ADDITIONAL_DOMAINS=""
 
 # Whether the server should behave as a proxy (disallows mTLS)
-ENV           SERVER_NAME="DuboDubonDuponey/1.0 (Caddy/2) [$NICK]"
+ENV           SERVER_NAME="DuboDubonDuponey/1.0 (Caddy/2) [$_SERVICE_NICK]"
 
 # Control wether tls is going to be "internal" (eg: self-signed), or alternatively an email address to enable letsencrypt
 ENV           TLS_MODE="internal"
@@ -111,12 +111,14 @@ ENV           AUTH_USERNAME="dubo-dubon-duponey"
 ENV           AUTH_PASSWORD="cmVwbGFjZV9tZV93aXRoX3NvbWV0aGluZwo="
 
 ### mDNS broadcasting
-# Name is used as a short description for the service
-ENV           MDNS_NAME="$NICK mDNS display name"
-# The service will be annonced and reachable at $MDNS_HOST.local (set to empty string to disable mDNS announces entirely)
-ENV           MDNS_HOST="$NICK"
 # Type to advertise
-ENV           MDNS_TYPE="_http._tcp"
+ENV           MDNS_TYPE="_$_SERVICE_TYPE._tcp"
+# Name is used as a short description for the service
+ENV           MDNS_NAME="$_SERVICE_NICK mDNS display name"
+# The service will be annonced and reachable at $MDNS_HOST.local (set to empty string to disable mDNS announces entirely)
+ENV           MDNS_HOST="$_SERVICE_NICK"
+# Also announce the service as a workstation (for example for the benefit of coreDNS mDNS)
+ENV           MDNS_STATION=true
 
 ENV           HEALTHCHECK_URL=http://127.0.0.1:10000/
 
